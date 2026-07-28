@@ -1,12 +1,11 @@
-import streamlit as pd
+import streamlit as st
 import pandas as pd
 import numpy as np
-import streamlit as st
 from fpdf import FPDF
-import base64
+import io
 
-# Configure page styling
-st.set_page_config(page_title="Professional Dividend Calculator & Planner", layout="wide")
+# Set up page styling and configurations
+st.set_page_config(page_title="Dividend Target & Savings Planner", layout="wide")
 
 st.markdown("""
     <style>
@@ -16,45 +15,39 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown('<div class="main-header">🎯 Elite Client Dividend Planner & Report Generator</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-header">🎯 Client Dividend & Wealth Roadmap Calculator</div>', unsafe_allow_html=True)
+st.write("Help your clients discover their target capital, map out a monthly savings timeline, and visualize the compounding power of DRIP.")
 
 # -----------------------------------------------------------------------------
 # SIDEBAR CONTROLS
 # -----------------------------------------------------------------------------
-st.sidebar.header("📋 Client Input Panel")
+st.sidebar.header("📋 Client Inputs")
 
 # Section 1: Core Dividend Goals
-st.sidebar.subheader("1. Core Income Target")
+st.sidebar.subheader("1. Income Target")
 net_monthly_goal = st.sidebar.number_input("Desired Net Monthly Dividend ($)", min_value=10, value=2000, step=100)
-avg_yield = st.sidebar.number_input("Portfolio Yield (%)", min_value=0.1, max_value=20.0, value=4.5, step=0.1)
-tax_rate = st.sidebar.number_input("Estimated Dividend Tax Rate (%)", min_value=0.0, max_value=90.0, value=15.0, step=0.5)
+avg_yield = st.sidebar.number_input("Expected Portfolio Yield (%)", min_value=0.1, max_value=20.0, value=4.5, step=0.1)
+tax_rate = st.sidebar.number_input("Estimated Tax Rate (%)", min_value=0.0, max_value=90.0, value=15.0, step=0.5)
 
-# Section 2: Payout Frequency Simulation
-st.sidebar.subheader("2. Payout Frequency Mix")
-st.sidebar.caption("Distribute portfolio weight across payout types (Must total 100%)")
-w_monthly = st.sidebar.slider("Monthly Payout Stocks (%)", 0, 100, 20)
-w_quarterly = st.sidebar.slider("Quarterly Payout Stocks (%)", 0, 100, 70)
-w_semiannual = st.sidebar.slider("Semi-Annual Payout Stocks (%)", 0, 100, 10)
-
-# Validate weight allocation
-total_weight = w_monthly + w_quarterly + w_semiannual
-if total_weight != 100:
-    st.sidebar.error(f"⚠️ Allocation Total is {total_weight}%. It must equal 100%.")
-
-# Section 3: Savings & Horizon
-st.sidebar.subheader("3. Accumulation Roadmap")
+# Section 2: Savings & Horizon
+st.sidebar.subheader("2. Savings & Horizon")
 current_savings = st.sidebar.number_input("Starting Capital ($)", min_value=0, value=10000, step=1000)
 monthly_deposit = st.sidebar.number_input("Monthly Contribution ($)", min_value=0, value=1000, step=100)
-years_horizon = st.sidebar.slider("Timeline Horizon (Years)", min_value=1, max_value=40, value=20)
+years_horizon = st.sidebar.slider("Simulation Horizon (Years)", min_value=1, max_value=40, value=20)
 
-# Section 4: Advanced Growth Variables
-st.sidebar.subheader("4. Growth & DRIP Dynamics")
+# Section 3: Advanced Growth & Frequency
+st.sidebar.subheader("3. Advanced Options")
 dividend_growth = st.sidebar.number_input("Annual Dividend Growth Rate (%)", min_value=0.0, max_value=15.0, value=3.0, step=0.1)
 capital_appreciation = st.sidebar.number_input("Annual Stock Price Growth (%)", min_value=0.0, max_value=20.0, value=4.0, step=0.1)
 enable_drip = st.sidebar.checkbox("Reinvest Dividends (DRIP)", value=True)
+payout_freq = st.sidebar.selectbox("Stock Dividend Payout Frequency", ["Monthly", "Quarterly", "Semi-Annual"])
+
+# Mapping payout intervals
+freq_map = {"Monthly": 1, "Quarterly": 3, "Semi-Annual": 6}
+months_per_payout = freq_map[payout_freq]
 
 # -----------------------------------------------------------------------------
-# CALCULATION CORE & ROADMAP
+# CALCULATIONS CORE
 # -----------------------------------------------------------------------------
 yield_dec = avg_yield / 100.0
 tax_dec = tax_rate / 100.0
@@ -63,7 +56,7 @@ gross_monthly_goal = net_monthly_goal / (1.0 - tax_dec)
 gross_annual_goal = gross_monthly_goal * 12
 required_capital = gross_annual_goal / yield_dec
 
-# Base Savings Timeline Calculations
+# Time-to-Target (Linear Roadmap)
 monthly_growth_rate = (capital_appreciation / 100.0) / 12
 months_to_target = 0
 temp_cap = current_savings
@@ -77,9 +70,7 @@ if monthly_deposit > 0 or monthly_growth_rate > 0:
             achieved_natively = True
             break
 
-# -----------------------------------------------------------------------------
-# DYNAMIC MONTHLY SIMULATION ENGINE (DRIP & Frequencies)
-# -----------------------------------------------------------------------------
+# Dynamic Loop Simulation
 sim_months = years_horizon * 12
 balance_history = []
 dividend_history = []
@@ -87,34 +78,40 @@ total_contributions = []
 
 current_balance = current_savings
 cumulative_contributed = current_savings
+annual_running_dividend = 0.0
 
 for month in range(1, sim_months + 1):
-    # 1. Calculate this month's dynamic annualized yield rate
     current_year = month // 12
-    monthly_yield = (avg_yield * ((1 + (dividend_growth / 100)) ** current_year)) / 12 / 100
+    # Adjust yield for inflation/dividend growth annually
+    dynamic_yield = avg_yield * ((1 + (dividend_growth / 100)) ** current_year)
     
-    # 2. Calculate net dividends earned this month
-    gross_div = current_balance * monthly_yield
-    net_div = gross_div * (1.0 - tax_dec)
-    
-    # 3. Apply fractional stock price growth
+    # Process payout if it falls on the frequency cycle month
+    net_div_received = 0.0
+    if month % months_per_payout == 0:
+        payout_percentage = (dynamic_yield / 100) / (12 / months_per_payout)
+        gross_div = current_balance * payout_percentage
+        net_div_received = gross_div * (1.0 - tax_dec)
+        
+        if enable_drip:
+            current_balance += net_div_received
+            
+    # Record tracking metric for annual baseline run-rate
+    annual_running_dividend = current_balance * (dynamic_yield / 100) * (1.0 - tax_dec)
+
+    # Monthly price changes & asset growth
     current_balance = current_balance * (1 + ((capital_appreciation / 100) / 12))
     
-    # 4. Handle DRIP reinvestment check
-    if enable_drip:
-        current_balance += net_div
-        
-    # 5. Process standard recurring deposits
+    # Monthly contribution updates
     current_balance += monthly_deposit
     cumulative_contributed += monthly_deposit
     
-    # 6. CAPTURE DATA AT THE END OF EVERY YEAR (SYNCHRONIZED STEP)
+    # Synchronize data arrays at the close of every year
     if month % 12 == 0:
         balance_history.append(current_balance)
-        dividend_history.append(net_div * 12)
+        dividend_history.append(annual_running_dividend)
         total_contributions.append(cumulative_contributed)
 
-# Build dynamic DataFrame for plotting (All arrays are now exactly 'years_horizon' long)
+# Dataframe generation
 plot_df = pd.DataFrame({
     "Year": list(range(1, len(balance_history) + 1)),
     "Portfolio Value ($)": balance_history,
@@ -122,80 +119,89 @@ plot_df = pd.DataFrame({
     "Principal Invested ($)": total_contributions
 }).set_index("Year")
 
-# Isolate standard final operational data year matrix for seasonal overview
-last_year_months = range((sim_months - 11), sim_months + 1)
-calendar_months_labels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-last_year_payouts = [monthly_cash_flows[m] for m in last_year_months]
-calendar_df = pd.DataFrame({"Month": calendar_months_labels, "Net Income ($)": last_year_payouts}).set_index("Month")
-
 # -----------------------------------------------------------------------------
 # DISPLAY INTERFACE
 # -----------------------------------------------------------------------------
 col1, col2, col3 = st.columns(3)
 
 with col1:
-    st.markdown('<div class="sub-header">🏁 Target Core Capital</div>', unsafe_allow_html=True)
-    st.markdown(f"<div class='metric-box'><h3>${required_capital:,.2f}</h3>Needed for static ${net_monthly_goal:,.2f}/mo baseline.</div>", unsafe_allow_html=True)
+    st.markdown('<div class="sub-header">🏁 Required Capital</div>', unsafe_allow_html=True)
+    st.markdown(f"<div class='metric-box'><h3>${required_capital:,.2f}</h3>Required to generate ${net_monthly_goal:,.2f}/mo net.</div>", unsafe_allow_html=True)
 
 with col2:
-    st.markdown('<div class="sub-header">⏳ Savings Runway Timeline</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-header">⏳ Standard Roadmap</div>', unsafe_allow_html=True)
     if achieved_natively:
-        st.markdown(f"<div class='metric-box'><h3>{months_to_target // 12} Yrs, {months_to_target % 12} Mos</h3>Duration without factoring DRIP variables.</div>", unsafe_allow_html=True)
+        years_req = months_to_target // 12
+        months_rem = months_to_target % 12
+        st.markdown(f"<div class='metric-box'><h3>{years_req} Yrs, {months_rem} Mos</h3>Time to build target capital from savings alone.</div>", unsafe_allow_html=True)
     else:
-        st.markdown("<div class='metric-box'><h3>50+ Years Needed</h3>Adjust variables to condense timeframe.</div>", unsafe_allow_html=True)
+        st.markdown("<div class='metric-box'><h3>50+ Years</h3>Increase savings or yield to hit target faster.</div>", unsafe_allow_html=True)
 
 with col3:
-    st.markdown('<div class="sub-header">📊 Dynamic Horizon Income</div>', unsafe_allow_html=True)
-    simulated_monthly_avg = dividend_history[-1] / 12 if dividend_history else 0
-    st.markdown(f"<div class='metric-box'><h3>${simulated_monthly_avg:,.2f}/mo</h3>Actual simulated Net average at Year {years_horizon}.</div>", unsafe_allow_html=True)
+    st.markdown('<div class="sub-header">📈 Simulated Portfolio</div>', unsafe_allow_html=True)
+    final_net_monthly = (dividend_history[-1] / 12) if dividend_history else 0
+    st.markdown(f"<div class='metric-box'><h3>${final_net_monthly:,.2f}/mo</h3>Net dividend income reached at Year {years_horizon}.</div>", unsafe_allow_html=True)
 
 st.markdown("---")
 
-# Visual Data Sections
-st.subheader("🔮 Portfolio & Cash Flow Horizon Visualizer")
-tab1, tab2, tab3 = st.tabs(["💰 Wealth Compounding", "💵 Annualized Income Distributions", "📅 Expected Client Monthly Cash Flow Grid"])
+st.subheader("🔮 Growth Projection & Compound Interest Visualizer")
+tab1, tab2 = st.tabs(["💰 Portfolio Value vs. Contributions", "💵 Dividend Income Growth Trajectory"])
 
 with tab1:
     st.line_chart(plot_df[["Portfolio Value ($)", "Principal Invested ($)"]])
 with tab2:
     st.bar_chart(plot_df["Annual Net Dividend ($)"])
-with tab3:
-    st.write(f"### Estimated Cash Flow Fluctuation Profile (Year {years_horizon})")
-    st.caption("Notice how income changes based on quarterly and semi-annual payout cycles instead of perfect linear averages.")
-    st.bar_chart(calendar_df["Net Income ($)"])
+
+st.subheader("📊 Annual Simulation Metrics Ledger")
+st.dataframe(
+    plot_df.style.format({
+        "Portfolio Value ($)": "${:,.2f}",
+        "Annual Net Dividend ($)": "${:,.2f}",
+        "Principal Invested ($)": "${:,.2f}"
+    }),
+    use_container_width=True
+)
 
 # -----------------------------------------------------------------------------
-# EXPORT PDF REPORT LOGIC
+# PDF REPORT EXPORTER IMPLEMENTATION
 # -----------------------------------------------------------------------------
-class DividendReport(FPDF):
-    def header(self):
-        self.set_font("Helvetica", "B", 11)
-        self.set_text_color(31, 58, 138)
-        self.cell(0, 10, "STRATEGIC DIVIDEND & WEALTH ROADMAP REPORT", border=0, ln=1, align="L")
-        self.set_draw_color(31, 58, 138)
-        self.line(10, 18, 200, 18)
-        self.ln(5)
-
-    def footer(self):
-        self.set_y(-15)
-        self.set_font("Helvetica", "I", 8)
-        self.set_text_color(156, 163, 175)
-        self.cell(0, 10, f"Page {self.page_no()} | Confidential Wealth Advisory Documentation", border=0, align="C")
-
-def generate_pdf_report():
-    pdf = DividendReport()
+def generate_pdf(df, req_cap, net_goal, final_div):
+    pdf = FPDF()
     pdf.add_page()
-    pdf.set_font("Helvetica", "", 10)
+    pdf.set_font("Arial", "B", 16)
+    pdf.cell(190, 10, "Client Dividend Wealth Roadmap Report", ln=True, align="C")
+    pdf.ln(10)
     
-    # Title Block
-    pdf.set_font("Helvetica", "B", 16)
-    pdf.set_text_color(17, 24, 39)
-    pdf.cell(0, 12, "Custom Wealth Accumulation Profile", ln=1)
-    pdf.ln(2)
+    pdf.set_font("Arial", "", 12)
+    pdf.cell(100, 10, f"Target Capital Needed: ${req_cap:,.2f}", ln=True)
+    pdf.cell(100, 10, f"Target Monthly Income Goal: ${net_goal:,.2f}", ln=True)
+    pdf.cell(100, 10, f"Projected Monthly Dividend at Horizon: ${final_div:,.2f}", ln=True)
+    pdf.ln(10)
     
-    # Financial Targets Overview Table
-    pdf.set_font("Helvetica", "B", 12)
-    pdf.set_text_color(15, 118, 110)
-    pdf.cell(0, 10, "1. Core Portfolio Capital Benchmarks", ln=1)
+    # Simple Table Headings
+    pdf.set_font("Arial", "B", 10)
+    pdf.cell(30, 8, "Year", border=1)
+    pdf.cell(55, 8, "Portfolio Value", border=1)
+    pdf.cell(55, 8, "Annual Net Dividend", border=1)
+    pdf.cell(50, 8, "Principal Invested", border=1)
+    pdf.ln()
     
-    pdf.set_font("Helvetica", "", 10)
+    # Table Content
+    pdf.set_font("Arial", "", 10)
+    for index, row in df.iterrows():
+        pdf.cell(30, 8, str(index), border=1)
+        pdf.cell(55, 8, f"${row['Portfolio Value ($)']:,.2f}", border=1)
+        pdf.cell(55, 8, f"${row['Annual Net Dividend ($)']:,.2f}", border=1)
+        pdf.cell(50, 8, f"${row['Principal Invested ($)']:,.2f}", border=1)
+        pdf.ln()
+        
+    return pdf.output()
+
+# Export button handler
+pdf_data = generate_pdf(plot_df, required_capital, net_monthly_goal, final_net_monthly)
+st.sidebar.download_button(
+    label="📥 Download Client PDF Report",
+    data=bytes(pdf_data),
+    file_name="dividend_roadmap_report.pdf",
+    mime="application/pdf"
+)
