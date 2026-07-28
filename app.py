@@ -9,9 +9,41 @@ st.set_page_config(page_title="Dividend Target & Savings Planner", layout="wide"
 
 st.markdown("""
     <style>
-    .main-header { font-size: 32px; font-weight: bold; color: #1E3A8A; margin-bottom: 20px; }
-    .sub-header { font-size: 20px; font-weight: semi-bold; color: #0F766E; margin-top: 15px; }
-    .metric-box { padding: 15px; background-color: #F3F4F6; border-radius: 8px; border-left: 5px solid #2563EB; }
+    /* Main Headings */
+    .main-header { font-size: 32px; font-weight: bold; color: #60A5FA; margin-bottom: 20px; }
+    .sub-header { font-size: 20px; font-weight: 600; color: #2DD4BF; margin-top: 15px; margin-bottom: 10px; }
+    
+    /* Top Metric Display Cards - Fixed for Dark Mode contrast */
+    .metric-box { 
+        padding: 20px; 
+        background-color: #1E293B; /* Dark slate background */
+        border-radius: 8px; 
+        border-left: 5px solid #3B82F6; /* Bright blue accent border */
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+        margin-bottom: 15px;
+    }
+    
+    /* Force text colors inside the metric boxes to be highly visible */
+    .metric-box h3 { 
+        color: #FFFFFF !important; 
+        font-size: 28px; 
+        margin: 0 0 8px 0; 
+        font-weight: bold;
+    }
+    .metric-box p, .metric-box div {
+        color: #94A3B8 !important; /* Soft gray for subtext */
+        font-size: 14px;
+        margin: 0;
+    }
+    
+    /* Clean up input boxes and blend them with the sidebar background */
+    div[data-testid="stNumberInput"] div[data-baseweb="input"] {
+        background-color: transparent !important;
+        border-radius: 6px !important;
+    }
+    div[data-testid="stNumberInput"] input {
+        background-color: transparent !important;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -126,21 +158,21 @@ col1, col2, col3 = st.columns(3)
 
 with col1:
     st.markdown('<div class="sub-header">🏁 Required Capital</div>', unsafe_allow_html=True)
-    st.markdown(f"<div class='metric-box'><h3>${required_capital:,.2f}</h3>Required to generate ${net_monthly_goal:,.2f}/mo net.</div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='metric-box'><h3>${required_capital:,.2f}</h3><p>Required to generate ${net_monthly_goal:,.2f}/mo net.</p></div>", unsafe_allow_html=True)
 
 with col2:
     st.markdown('<div class="sub-header">⏳ Standard Roadmap</div>', unsafe_allow_html=True)
     if achieved_natively:
         years_req = months_to_target // 12
         months_rem = months_to_target % 12
-        st.markdown(f"<div class='metric-box'><h3>{years_req} Yrs, {months_rem} Mos</h3>Time to build target capital from savings alone.</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='metric-box'><h3>{years_req} Yrs, {months_rem} Mos</h3><p>Time to build target capital from savings alone.</p></div>", unsafe_allow_html=True)
     else:
-        st.markdown("<div class='metric-box'><h3>50+ Years</h3>Increase savings or yield to hit target faster.</div>", unsafe_allow_html=True)
+        st.markdown("<div class='metric-box'><h3>50+ Years</h3><p>Increase savings or yield to hit target faster.</p></div>", unsafe_allow_html=True)
 
 with col3:
     st.markdown('<div class="sub-header">📈 Simulated Portfolio</div>', unsafe_allow_html=True)
     final_net_monthly = (dividend_history[-1] / 12) if dividend_history else 0
-    st.markdown(f"<div class='metric-box'><h3>${final_net_monthly:,.2f}/mo</h3>Net dividend income reached at Year {years_horizon}.</div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='metric-box'><h3>${final_net_monthly:,.2f}/mo</h3><p>Net dividend income reached at Year {years_horizon}.</p></div>", unsafe_allow_html=True)
 
 st.markdown("---")
 
