@@ -85,66 +85,42 @@ balance_history = []
 dividend_history = []
 total_contributions = []
 
-# Tracker dictionaries for cash flow calendar analysis
-monthly_cash_flows = {m: 0.0 for m in range(1, sim_months + 1)}
-
 current_balance = current_savings
 cumulative_contributed = current_savings
 
 for month in range(1, sim_months + 1):
-    # Scale current annual yield based on selected compound growth rate
-    current_annual_yield = avg_yield * ((1 + (dividend_growth / 100)) ** (month // 12))
+    # 1. Calculate this month's dynamic annualized yield rate
+    current_year = month // 12
+    monthly_yield = (avg_yield * ((1 + (dividend_growth / 100)) ** current_year)) / 12 / 100
     
-    # Calculate fractional dividend chunks based on distributions
-    gross_div_pool = current_balance * (current_annual_yield / 100)
-    net_div_pool = gross_div_pool * (1.0 - tax_dec)
+    # 2. Calculate net dividends earned this month
+    gross_div = current_balance * monthly_yield
+    net_div = gross_div * (1.0 - tax_dec)
     
-    # Isolate specific payouts for this specific calendar month
-    month_dividend_payout = 0.0
-    
-    # 1. Monthly paying stocks pay every month
-    month_dividend_payout += (net_div_pool * (w_monthly / 100)) / 12
-    
-    # 2. Quarterly paying stocks pay every 3 months
-    if month % 3 == 0:
-        month_dividend_payout += (net_div_pool * (w_quarterly / 100)) / 4
-        
-    # 3. Semi-annual paying stocks pay every 6 months
-    if month % 6 == 0:
-        month_dividend_payout += (net_div_pool * (w_semiannual / 100)) / 2
-        
-    # Apply market valuation price shifts
+    # 3. Apply fractional stock price growth
     current_balance = current_balance * (1 + ((capital_appreciation / 100) / 12))
     
-    # Process capital distributions & inject cash flows
+    # 4. Handle DRIP reinvestment check
     if enable_drip:
-        current_balance += month_dividend_payout
+        current_balance += net_div
         
+    # 5. Process standard recurring deposits
     current_balance += monthly_deposit
     cumulative_contributed += monthly_deposit
     
-    # Log the exact net payouts observed
-    monthly_cash_flows[month] = month_dividend_payout
-    
-    # Keep slice ledger metrics annually
-    if month % 12 == 0 or month == 1:
+    # 6. CAPTURE DATA AT THE END OF EVERY YEAR (SYNCHRONIZED STEP)
+    if month % 12 == 0:
         balance_history.append(current_balance)
+        dividend_history.append(net_div * 12)
         total_contributions.append(cumulative_contributed)
 
-# Map dynamic metrics
-for year_idx in range(1, years_horizon + 1):
-    m_start = (year_idx - 1) * 12 + 1
-    m_end = year_idx * 12
-    annual_payout_sum = sum([monthly_cash_flows[m] for m in range(m_start, m_end + 1)])
-    dividend_history.append(annual_payout_sum)
-
-# Handle historical lengths safely
+# Build dynamic DataFrame for plotting (All arrays are now exactly 'years_horizon' long)
 plot_df = pd.DataFrame({
     "Year": list(range(1, len(balance_history) + 1)),
     "Portfolio Value ($)": balance_history,
     "Annual Net Dividend ($)": dividend_history,
     "Principal Invested ($)": total_contributions
-})
+}).set_index("Year")
 
 # Isolate standard final operational data year matrix for seasonal overview
 last_year_months = range((sim_months - 11), sim_months + 1)
