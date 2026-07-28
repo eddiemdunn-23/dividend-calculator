@@ -144,7 +144,7 @@ plot_df = pd.DataFrame({
     "Portfolio Value ($)": balance_history,
     "Annual Net Dividend ($)": dividend_history,
     "Principal Invested ($)": total_contributions
-}).set_index("Year")
+})
 
 # Isolate standard final operational data year matrix for seasonal overview
 last_year_months = range((sim_months - 11), sim_months + 1)
